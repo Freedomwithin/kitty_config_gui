@@ -1,0 +1,9 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Name=Kitty Config Engine
+Comment=Graphical Configuration for Kitty Terminal
+Exec=/home/jonathon/Software/jonathon_and_maya/kitty_config_gui/scripts/start_kitty_config_gui.sh
+Icon=preferences-system
+Terminal=false
+Type=Application
+Categories=Settings;System;

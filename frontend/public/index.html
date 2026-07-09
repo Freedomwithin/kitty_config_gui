@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitty Config Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { background-color: #050508; color: #a5b4fc; font-family: 'Victor Mono', monospace; }
+        .tab-active { 
+            border-bottom: 2px solid #c084fc; 
+            color: #c084fc;
+            background: rgba(192, 132, 252, 0.05);
+        }
+        .category-header {
+            background: linear-gradient(90deg, rgba(67, 56, 202, 0.2) 0%, transparent 100%);
+            border-left: 3px solid #6366f1;
+        }
+        input[type="range"] { accent-color: #6366f1; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 1px solid #4338ca; border-radius: 4px; }
+        .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .setting-row {
+            background: rgba(30, 27, 75, 0.5);
+            border: 1px solid rgba(67, 56, 202, 0.2);
+            transition: all 0.2s ease;
+        }
+        .setting-row:hover {
+            border-color: rgba(192, 132, 252, 0.4);
+            background: rgba(30, 27, 75, 0.8);
+        }
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 4px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #0a0a0f;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #4338ca;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const SettingInput = ({ setting, keyName, value, onChange }) => {
+            const handleChange = (e) => {
+                const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+                onChange(keyName, val);
+            };
+
+            const commonClasses = "w-full bg-[#1e1b4b] border border-[#4338ca] p-2 rounded text-sm outline-none text-white focus:border-[#c084fc] transition";
+            
+            switch(setting.type) {
+                case 'font-select':
+                    return (
+                        <select value={value || setting.default} onChange={handleChange} className={commonClasses}>
+                            <option value="auto">Auto</option>
+                            <option value="Victor Mono">Victor Mono</option>
+                            <option value="JetBrains Mono">JetBrains Mono</option>
+                            <option value="Fira Code">Fira Code</option>
+                            <option value="Hack">Hack</option>
+                            <option value="Monospace">Monospace</option>
+                        </select>
+                    );
+                case 'color':
+                    return (
+                        <div className="flex items-center space-x-2">
+                            <input type="color" value={value || setting.default} onChange={handleChange} className="w-10 h-10 p-1 bg-transparent cursor-pointer" />
+                            <input type="text" value={value || setting.default} onChange={handleChange} className="flex-1 bg-[#1e1b4b] border border-[#4338ca] p-2 rounded text-sm text-white font-mono" />
+                        </div>
+                    );
+                case 'boolean':
+                    return (
+                        <div className="flex items-center">
+                            <input type="checkbox" checked={value !== undefined ? value : setting.default} onChange={handleChange} className="w-5 h-5 accent-[#6366f1] cursor-pointer" />
+                            <span className="ml-2 text-xs text-[#818cf8]">{value !== undefined ? (value ? 'Enabled' : 'Disabled') : (setting.default ? 'Enabled' : 'Disabled')}</span>
+                        </div>
+                    );
+                case 'select':
+                    return (
+                        <select value={value || setting.default} onChange={handleChange} className={commonClasses}>
+                            {setting.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                    );
+                case 'range':
+                    return (
+                        <div>
+                            <input type="range" min={setting.min} max={setting.max} step={setting.step || 1} value={value || setting.default} onChange={handleChange} className="w-full h-1 bg-[#1e1b4b] rounded appearance-none" />
+                            <span className="text-xs text-[#818cf8] mt-1 block">{value || setting.default}</span>
+                        </div>
+                    );
+                case 'number':
+                    return (
+                        <input type="number" min={setting.min} max={setting.max} step={setting.step || 1} value={value || setting.default} onChange={handleChange} className={commonClasses} />
+                    );
+                case 'text':
+                default:
+                    return (
+                        <input type="text" value={value || setting.default} onChange={handleChange} className={commonClasses} placeholder={setting.default} />
+                    );
+            }
+        };
+
+        const App = () => {
+            const [activeCategory, setActiveCategory] = useState(null);
+            const [status, setStatus] = useState('Ready');
+            const [fontList, setFontList] = useState(['Victor Mono', 'JetBrains Mono', 'Fira Code', 'Hack']);
+            const [schema, setSchema] = useState({ categories: {} });
+            const [config, setConfig] = useState({});
+
+            useEffect(() => {
+                Promise.all([
+                    fetch('/api/schema').then(r => r.json()),
+                    fetch('/api/fonts').then(r => r.json()),
+                    fetch('/api/config').then(r => r.json())
+                ]).then(([schemaRes, fontsRes, configRes]) => {
+                    if(schemaRes.success) setSchema(schemaRes.data);
+                    if(fontsRes.success) setFontList(fontsRes.data);
+                    if(configRes.success) {
+                        const newConfig = {};
+                        Object.values(schemaRes.data.categories).forEach(cat => {
+                            Object.entries(cat.settings).forEach(([key, setting]) => {
+                                newConfig[key] = configRes.data[key] || setting.default;
+                            });
+                        });
+                        setConfig(newConfig);
+                    }
+                });
+            }, []);
+
+            const handleChange = (key, value) => {
+                setConfig(prev => ({ ...prev, [key]: value }));
+            };
+
+            const handleSelectAll = async () => {
+                setStatus('Capturing Buffer...');
+                try {
+                    const res = await fetch('/api/select-all', { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        setStatus('Content Selected');
+                        setTimeout(() => setStatus('Ready'), 2000);
+                    }
+                } catch (err) { setStatus('Select Failed'); }
+            };
+
+            const handleSave = async () => {
+                setStatus('Synchronizing...');
+                try {
+                    const res = await fetch('/api/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(config)
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        setStatus('Config Notarized');
+                        setTimeout(() => setStatus('Ready'), 3000);
+                    }
+                } catch (err) { setStatus('Sync Failed'); }
+            };
+
+            const categories = Object.keys(schema.categories);
+            const activeCat = activeCategory || categories[0];
+
+            return (
+                <div className="flex items-center justify-center min-h-screen p-4">
+                    <div className="w-full max-w-6xl bg-[#0a0a0f] border border-[#4338ca] rounded-2xl p-6 shadow-2xl max-h-[95vh] flex flex-col">
+                        <header className="mb-6 flex justify-between items-end border-b border-[#4338ca]/30 pb-4 flex-wrap gap-4">
+                            <div>
+                                <h1 className="text-3xl font-bold text-[#c084fc]">Kitty Config Engine</h1>
+                                <p className="text-xs text-[#818cf8] uppercase tracking-tighter">Complete Terminal Configuration Dashboard</p>
+                            </div>
+                            <div className="flex items-center space-x-4 flex-wrap gap-2">
+                                <button onClick={handleSelectAll} className="text-[10px] bg-[#bc00ff] hover:bg-[#c084fc] text-black px-3 py-1.5 rounded font-bold uppercase transition-all active:scale-95 shadow-[0_0_15px_rgba(188,0,255,0.4)]">
+                                    Select All Terminal
+                                </button>
+                                <div className="text-right text-[10px] font-mono text-[#6366f1]">
+                                    STATUS: <span className="text-white animate-pulse">{status}</span>
+                                </div>
+                            </div>
+                        </header>
+
+                        <div className="flex flex-1 min-h-0">
+                            <nav className="w-48 flex-shrink-0 space-y-1 pr-4 overflow-y-auto scrollbar-thin">
+                                {categories.map(cat => (
+                                    <button 
+                                        key={cat} 
+                                        onClick={() => setActiveCategory(cat)} 
+                                        className={`w-full text-left px-3 py-2 rounded text-xs font-bold uppercase tracking-wider transition-all ${activeCat === cat ? 'tab-active bg-[#1e1b4b]' : 'text-[#818cf8] hover:text-white hover:bg-[#1e1b4b]/50'}`}
+                                    >
+                                        <span className="mr-2">{schema.categories[cat]?.icon || '•'}</span>
+                                        {cat}
+                                    </button>
+                                ))}
+                            </nav>
+
+                            <main className="flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-2">
+                                {activeCat && schema.categories[activeCat] && (
+                                    <div className="animate-fadeIn space-y-4">
+                                        <h2 className="text-lg font-bold text-[#c084fc] category-header pl-4 py-2">
+                                            {schema.categories[activeCat].icon} {activeCat}
+                                        </h2>
+                                        
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                            {Object.entries(schema.categories[activeCat].settings).map(([key, setting]) => (
+                                                <div key={key} className="setting-row p-4 rounded-lg">
+                                                    <div className="mb-2 flex justify-between items-start">
+                                                        <label className="text-sm font-bold text-[#a5b4fc]">{setting.label}</label>
+                                                        <span className="text-[8px] font-mono text-[#6366f1] bg-[#1e1b4b] px-2 py-0.5 rounded">{key}</span>
+                                                    </div>
+                                                    <SettingInput 
+                                                        setting={setting} 
+                                                        keyName={key} 
+                                                        value={config[key]} 
+                                                        onChange={handleChange} 
+                                                    />
+                                                    {setting.description && (
+                                                        <p className="text-[10px] text-[#818cf8] mt-1 italic">{setting.description}</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </main>
+                        </div>
+
+                        <footer className="mt-6 pt-4 border-t border-[#4338ca]/20 flex justify-between items-center">
+                            <div className="text-xs text-[#6366f1] font-mono">
+                                {Object.keys(config).length} settings loaded
+                            </div>
+                            <button onClick={handleSave} className="bg-[#4338ca] hover:bg-[#6366f1] text-white px-12 py-3 rounded-xl font-bold shadow-[0_0_20px_rgba(67,56,202,0.3)] transition-all transform active:scale-95">
+                                Synchronize Config
+                            </button>
+                        </footer>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

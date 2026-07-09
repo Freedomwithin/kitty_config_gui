@@ -1,0 +1,4 @@
+
+[Kitty Config GUI] Service Active
+Access at: http://localhost:3040
+
