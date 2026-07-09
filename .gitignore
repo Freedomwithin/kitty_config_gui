@@ -1,0 +1,33 @@
+# Create .gitignore if you don't have one
+cat > .gitignore << 'EOF'
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs
+*.log
+.gui_log.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backup files
+kitty.conf.bak_*
+
+# Temporary
+tmp/
+temp/
+EOF
+
+# Then add and commit it
+git add .gitignore
+git commit -m "Add .gitignore"

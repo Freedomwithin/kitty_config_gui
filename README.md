@@ -219,6 +219,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-**Made with ❤️ by [Jonathon](https://github.com/virtualmachine2323) & [Maya](https://github.com/Freedomwithin/maya.ai-sovereign)**
+**Made with ❤️ by [Jonathon](https://github.com/Freedomwithin) & [Maya](https://github.com/Freedomwithin/maya.ai-sovereign)**
 
 *"Because terminals should be beautiful AND easy to configure"*
